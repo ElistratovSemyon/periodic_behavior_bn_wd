@@ -96,6 +96,7 @@ for ind in range(len(lrs)):
         exp_name = exp_name + '_fbgd'
     if 'fix_si_pnorm' in add_params:
         exp_name = exp_name + '_fix_si_pnorm{}'.format(p['fix_si_pnorm_value'])
+
         
 
     p['dir'] = params['dir'] + '/' + exp_name
@@ -104,8 +105,12 @@ for ind in range(len(lrs)):
     p_test['models_dir'] = params_test['models_dir'] + '/' + exp_name + '/trial_0'
 
     # train
-    command = 'train.py {} >> {}'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p.items()])+' ' +add_params, exp_log_path+'.out')
-    commands.append(command)
+    if args.SAM:
+        command = 'train.py --SAM {} >> {}'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p.items()])+' ' +add_params, exp_log_path+'.out')
+        commands.append(command)
+    else:
+        command = 'train.py {} >> {}'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p.items()])+' ' +add_params, exp_log_path+'.out')
+        commands.append(command)
 
     #train metrics
     p_test['save_path'] = params_test['save_path'] + '/' + exp_name + '/train-tm.npz'
