@@ -119,6 +119,11 @@ def fix_si_pnorm(model, si_pnorm_0, model_name="ResNet18"):
         if "conv" in n:
             p.data *= p_coef
 
+def get_si_params_norm(model):
+    si_pnorm = np.sqrt(sum((p ** 2).sum().item() for n, p in model.named_parameters() if "conv" in n))
+    return si_pnorm
+
+
 def train_epoch(
     loader,
     model,
@@ -213,30 +218,27 @@ def train_epoch(
     return {
         "loss": loss_sum / num_objects_current,
         "accuracy": None if regression else correct / num_objects_current * 100.0,
+        "weights_norm" : get_si_params_norm(model)
     }
 
-def get_params_data(model):
-    grad = []
+def get_si_params_data(model):
+    grads = []
     params = []
-    for param in model.parameters():
-        grad.append(param.grad.data)
-        params.append(param.data)
-    return params, grad
+    for n, p in model.named_parameters():
+        if "conv" in n:
+            grads.append(p.grad.data)
+            params.append(p.data)
+    return params, grads
 
-def set_params_data(model, params, grad, alpha):
-    for i, param in enumerate(model.parameters()):
-        param.data = params[i]
-        param.grad.data = (alpha) * param.grad.data + (1-alpha) * grad[i] 
+def set_si_params_data(model, params, grads, alpha):
+    for i, (n, p) in enumerate(model.named_parameters()):
+        if "conv" in n:
+            p.data = params[i]
+            p.grad.data = (alpha) * p.grad.data + (1-alpha) * grads[i] 
 
-def update_params_data(model, grad_norm, r):
+def update_si_params_data(model, grad_norm, r):
     for i, param in enumerate(model.parameters()):
         param.data = param.data + r * param.grad.data / grad_norm
-
-def get_params_norm(model):
-    norm = 0
-    for i, param in enumerate(model.parameters()):
-        norm += (param.data.flatten() ** 2).sum()
-    return torch.sqrt(norm)
 
 
 def SAM_train_epoch(
@@ -289,11 +291,11 @@ def SAM_train_epoch(
         loss.backward()
 
         # get grad and weights
-        params, grad = get_params_data(model)
+        params, grads = get_params_data(model)
         # find norm_grad
-        grad_norm = torch.norm(torch.cat([i.flatten() for i in grad]).clone().detach())
+        grad_norm = torch.norm(torch.cat([i.flatten() for i in grads]).clone().detach())
         # update weights to w+r*grad/||grad||
-        update_params_data(model, grad_norm, r)
+        update_si_params_data(model, grad_norm, r)
         
         # TODO: should we scale ???
         #if si_pnorm_0 is not None:
@@ -314,7 +316,7 @@ def SAM_train_epoch(
             loss_sum += loss.data.item() * input.size(0)
 
         # back to w weights
-        set_params_data(model, params, grad, alpha)
+        set_si_params_data(model, params, grads, alpha)
         
         # do step for w weights with SAM direction
         if not fbgd:
@@ -362,7 +364,7 @@ def SAM_train_epoch(
     return {
         "loss": loss_sum / num_objects_current,
         "accuracy": None if regression else correct / num_objects_current * 100.0,
-        "weights_norm" : get_params_norm(model)
+        "weights_norm" : get_si_params_norm(model)
     }
 
 
