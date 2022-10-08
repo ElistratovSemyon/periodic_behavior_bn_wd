@@ -166,7 +166,8 @@ def main():
                     d_schedule=args.d_schedule,
                     si_pnorm_0=si_pnorm_0,
                     fbgd=args.fbgd,
-                    cosan_schedule = args.cosan_schedule)  
+                    cosan_schedule = args.cosan_schedule, 
+                    SAM=args.SAM)  
         if args.cosan_schedule:
             scheduler.step()
     

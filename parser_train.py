@@ -259,5 +259,11 @@ def parser():
         help="cosine anealing schedule"
     )
 
+    parser.add_argument(
+        "--SAM", 
+        action="store_true", 
+        help="SAM optimization"
+    )
+
     args = parser.parse_args()
     return args
