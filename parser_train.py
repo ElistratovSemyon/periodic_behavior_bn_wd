@@ -11,6 +11,12 @@ def parser():
     )
     
     parser.add_argument(
+        "-f",
+        type=str,
+        help="service arg for notebook",
+    )
+
+    parser.add_argument(
         "--dir",
         type=str,
         default="./training_dir",
@@ -209,6 +215,7 @@ def parser():
     
     parser.add_argument(
         "--no_schedule", 
+        default=True,
         action="store_true", 
         help="disable lr schedule"
     )
