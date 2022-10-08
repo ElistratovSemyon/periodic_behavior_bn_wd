@@ -215,6 +215,157 @@ def train_epoch(
         "accuracy": None if regression else correct / num_objects_current * 100.0,
     }
 
+def get_params_data(model):
+    grad = []
+    params = []
+    for param in model.parameters():
+        grad.append(param.grad.data)
+        params.append(param.data)
+    return params, grad
+
+def set_params_data(model, params, grad, alpha):
+    for i, param in enumerate(model.parameters()):
+        param.data = params[i]
+        param.grad.data = (alpha) * param.grad.data + (1-alpha) * grad[i] 
+
+def update_params_data(model, grad_norm, r):
+    for i, param in enumerate(model.parameters()):
+        param.data = param.data + r * param.grad.data / grad_norm
+
+def get_params_norm(model):
+    norm = 0
+    for i, param in enumerate(model.parameters()):
+        norm += (param.data.flatten() ** 2).sum()
+    return torch.sqrt(norm)
+
+
+def SAM_train_epoch(
+    loader,
+    model,
+    criterion,
+    optimizer,
+    r,
+    alpha=1.0,
+    cuda=True,
+    regression=False,
+    verbose=False,
+    subset=None,
+    fbgd=False,
+    save_freq_int = 0,
+    epoch=None,
+    output_dir = None,
+    si_pnorm_0 = None
+):
+    loss_sum = 0.0
+    correct = 0.0
+    verb_stage = 0
+    save_ind = 0
+
+    num_objects_current = 0
+    num_batches = len(loader)
+
+    model.train()
+
+    if subset is not None:
+        num_batches = int(num_batches * subset)
+        loader = itertools.islice(loader, num_batches)
+
+    if verbose:
+        loader = tqdm.tqdm(loader, total=num_batches)
+
+    reduction = "sum" if fbgd else "mean"
+    optimizer.zero_grad()
+
+    for i, (input, target) in enumerate(loader):
+        if cuda:
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+
+        ### TODO: when we SI NORMALIZE
+        # first forward
+        loss, output = criterion(model, input, target, reduction)
+
+        # TODO: save loss after second forward
+        loss.backward()
+
+        # get grad and weights
+        params, grad = get_params_data(model)
+        # find norm_grad
+        grad_norm = torch.norm(torch.cat([i.flatten() for i in grad]).clone().detach())
+        # update weights to w+r*grad/||grad||
+        update_params_data(model, grad_norm, r)
+        
+        # TODO: should we scale ???
+        #if si_pnorm_0 is not None:
+        #    fix_si_pnorm(model, si_pnorm_0, model_name)
+        
+
+        # second forward
+        loss, output = criterion(model, input, target, reduction)
+
+        # TODO: save loss after second forward
+        if fbgd:
+            loss_sum += loss.item()
+            loss /= len(loader.dataset)
+            loss.backward()
+        else:
+            # second backward, find new gradient
+            loss.backward()
+            loss_sum += loss.data.item() * input.size(0)
+
+        # back to w weights
+        set_params_data(model, params, grad, alpha)
+        
+        # do step for w weights with SAM direction
+        if not fbgd:
+            optimizer.step()
+            optimizer.zero_grad()
+
+            if si_pnorm_0 is not None:
+                fix_si_pnorm(model, si_pnorm_0)
+
+        if not regression:
+            pred = output.data.argmax(1, keepdim=True)
+            correct += pred.eq(target.data.view_as(pred)).sum().item()
+
+        num_objects_current += input.size(0)
+
+        if verbose and 10 * (i + 1) / num_batches >= verb_stage + 1:
+            print(
+                "Stage %d/10. Loss: %12.4f. Acc: %6.2f"
+                % (
+                    verb_stage + 1,
+                    loss_sum / num_objects_current,
+                    correct / num_objects_current * 100.0,
+                )
+            )
+            verb_stage += 1
+            
+        if (save_freq_int > 0) and (save_freq_int*(i+1)/ num_batches >= save_ind + 1) and (save_ind + 1 < save_freq_int):
+            save_checkpoint_int(
+                output_dir,
+                epoch,
+                save_ind + 1,
+                state_dict=model.state_dict(),
+                optimizer=optimizer.state_dict()
+            )
+            save_ind += 1
+            
+
+    if fbgd:
+        optimizer.step()
+        optimizer.zero_grad()
+        
+        if si_pnorm_0 is not None:
+            fix_si_pnorm(model, si_pnorm_0, model_name)
+
+    return {
+        "loss": loss_sum / num_objects_current,
+        "accuracy": None if regression else correct / num_objects_current * 100.0,
+        "weights_norm" : get_params_norm(model)
+    }
+
+
 
 def eval(loader, model, criterion, cuda=True, regression=False, verbose=False):
     loss_sum = 0.0

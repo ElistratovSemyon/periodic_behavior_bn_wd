@@ -177,7 +177,7 @@ def main():
 def train_epoch(model, loaders, criterion, optimizer, epoch, end_epoch,
                 eval_freq=1, save_freq=10, save_freq_int=0, output_dir='./', lr_init=0.01,
                 lr_schedule=True, noninvlr = -1, c_schedule=None, d_schedule=None, si_pnorm_0=None,fbgd=False, 
-               cosan_schedule = False):
+               cosan_schedule = False, SAM=False):
 
     time_ep = time.time()
 
@@ -199,7 +199,11 @@ def train_epoch(model, loaders, criterion, optimizer, epoch, end_epoch,
             lr = param_group["lr"]
             break
 
-    train_res = training_utils.train_epoch(loaders["train"], model, criterion, optimizer, fbgd=fbgd,si_pnorm_0=si_pnorm_0,
+    if not SAM:
+        train_res = training_utils.train_epoch(loaders["train"], model, criterion, optimizer, fbgd=fbgd,si_pnorm_0=si_pnorm_0,
+                                           save_freq_int=save_freq_int,epoch = epoch,output_dir = output_dir)
+    else:
+        train_res = training_utils.SAM_train_epoch(loaders["train"], model, criterion, optimizer, r=0.05, fbgd=fbgd,si_pnorm_0=si_pnorm_0,
                                            save_freq_int=save_freq_int,epoch = epoch,output_dir = output_dir)
     if (
         epoch == 0
@@ -232,6 +236,7 @@ def train_epoch(model, loaders, criterion, optimizer, epoch, end_epoch,
         lr,
         train_res["loss"],
         train_res["accuracy"],
+        train_res["weights_norm"],
         test_res["loss"],
         test_res["accuracy"],
         time_ep,

@@ -8,6 +8,9 @@ import time
 parser = argparse.ArgumentParser(description='Managing experiments')
 parser.add_argument('--test', action='store_true',
                         help='print (test) or os.system (run)')
+parser.add_argument('-f', help='service args for colab')
+parser.add_argument('--SAM', action='store_true', help='SAM optimization')
+
 
 args = parser.parse_args()
     
@@ -112,6 +115,7 @@ for ind in range(len(lrs)):
     #test metrics
     p_test['save_path'] = params_test['save_path'] + '/' + exp_name + '/test-em.npz'
     commands.append('get_info.py {} --use_test --eval_model'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p_test.items()])))
+
            
                     
 if ENVIRONMENT:

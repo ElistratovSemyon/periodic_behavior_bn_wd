@@ -13,8 +13,8 @@ def parser():
     parser.add_argument(
         "--dir",
         type=str,
-        default=None,
-        required=True,
+        default="./training_dir",
+        required=False,
         help="training directory (default: None)",
     )
     
@@ -80,8 +80,8 @@ def parser():
     parser.add_argument(
         "--model",
         type=str,
-        default=None,
-        required=True,
+        default="ConvNetSI",
+        required=False,
         metavar="MODEL",
         help="model name (default: None)",
     )
